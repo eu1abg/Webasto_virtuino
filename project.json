@@ -1,16 +1,16 @@
 {
   "name": "Название проекта",
-  "about": "Краткое описание проекта",
-  "version": "2.2",
-  "notes": "Очень важно",
+  "about": "Очень нужно",
+  "version": "2.99999",
+  "notes": "Комментарии к обновлению",
   "builds": [
     {
       "chipFamily": "ESP32",
       "parts": [
-       { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino.ino.bootloader", "offset": 23440 },
-       { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino.ino.partitions.bin", "offset": 3072 },
-       { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/boot_app0.bin", "offset": 8192 },
-       { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino.ino.bin", "offset": 1010784 }
+        {
+          "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/firmware.bin",
+          "offset": 0
+        }
       ]
     }
   ]
