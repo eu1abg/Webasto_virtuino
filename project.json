@@ -5,49 +5,15 @@
   "notes": "Тестируем",
   "builds": [
     {
-      "chipFamily": "ESP8266",
-      "parts": [
-        {
-          "path": "https://raw.githubusercontent.com/GyverLibs/GyverHub-example/main/bin/webasto_virtuino.ino.bin",
-          "offset": 0
-        }
-      ]
-    },
-    {
       "chipFamily": "ESP32",
       "parts": [
-        {
-          "path": "https://raw.githubusercontent.com/GyverLibs/GyverHub-example/main/bin/webasto_virtuino.ino.bin",
-          "offset": 0
-        }
-      ]
-    },
-    {
-      "chipFamily": "ESP32-C3",
-      "parts": [
-        {
-          "path": "https://raw.githubusercontent.com/GyverLibs/GyverHub-example/main/bin/webasto_virtuino.ino.bin",
-          "offset": 0
-        }
-      ]
-    },
-    {
-      "chipFamily": "ESP32-S2",
-      "parts": [
-        {
-          "path": "https://raw.githubusercontent.com/GyverLibs/GyverHub-example/main/bin/webasto_virtuino.ino.bin",
-          "offset": 0
-        }
-      ]
-    },
-    {
-      "chipFamily": "ESP32-S3",
-      "parts": [
-        {
-          "path": "https://raw.githubusercontent.com/GyverLibs/GyverHub-example/main/bin/webasto_virtuino.ino.bin",
-          "offset": 0
-        }
+        
+        { "path": "https://raw.githubusercontent.com/GyverLibs/testota/main/bin/webasto_virtuino.ino.bootloader.bin", "offset": 23440 },
+        { "path": "https://raw.githubusercontent.com/GyverLibs/testota/main/bin/webasto_virtuino.ino.partitions.bin", "offset": 3072 },
+        { "path": "https://raw.githubusercontent.com/GyverLibs/testota/main/bin/boot_app0.bin", "offset": 8192 },
+        { "path": "https://raw.githubusercontent.com/GyverLibs/testota/main/bin/webasto_virtuino.ino.bin", "offset": 1010800 }
+          
+        
       ]
     }
-  ]
-}
+   
