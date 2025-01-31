@@ -8,7 +8,7 @@
       "chipFamily": "ESP32",
       "parts": [
         {
-          "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/firmware.bin",
+          "path": "https://raw.githubusercontent.com/eu1abg/Smart_Fen/main/bin/firmware.bin",
           "offset": 0
         }
       ]
