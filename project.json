@@ -2,7 +2,7 @@
   "name": "Webasto",
   "about": "Очень нужно",
   "version": "1.1",
-  "notes": "Комментарии к обновлению1",
+  "notes": "Улучшения",
   "builds": [
     {
       "chipFamily": "ESP32",
