@@ -1,7 +1,7 @@
 {
   "name": "Webasto",
   "about": "Очень нужно",
-  "version": "1.0",
+  "version": "1.12",
   "notes": "Улучшения",
   "builds": [
     {
@@ -9,6 +9,7 @@
       "parts": [
         {
           "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino.ino.bin",
+          //"path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino.ino.bin",
           "offset": 0
         }
       ]
