@@ -338,7 +338,7 @@ if(m1==0){
 if (enc1.isHolded()){ n=1; m1=1; ekrON=1; tone(tonePin, 1000, 1000); oled.clear();oled.setScale(2); oled.setCursor(10, 0);oled.invertText(1); oled.print("  Меню.  ");menu=1; oled.invertText(0);oled.setScale(1); }
  tmr8.setTime(30000);tmr8.start();}
 else if (m1==1) { 
-   if (enc1.isRelease())  { m=m+1; oled.setContrast(200); tone(tonePin, 1500, 100);tmr8.start();if (m>6) {m=0;} }
+   if (enc1.isRelease())  { m=m+1; oled.setContrast(200); tone(tonePin, 1500, 100);tmr8.start();if (m>7) {m=0;} }
 
 switch (m) { 
   case 0: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Все выкл.       "); if (enc1.isHolded() and (m1=1))  {switch1=0; m1=0; n=0; tone(tonePin, 1000, 1000);tone(tonePin, 2500, 100);oled.clear();} break;
