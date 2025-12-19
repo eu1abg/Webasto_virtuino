@@ -1,6 +1,6 @@
 // ядро ЕСП32 3.00
 #include <AutoOTA.h>
-AutoOTA ota("2.03", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
+AutoOTA ota("2.01", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
 bool obn=0;       // флаг обновления
 #define Kline 0  // берем данные из вебасты по Клинии 1. датчики внешнии 0.
 #define Rele 1   //  1 используем реле для запуска вебасты.  0 по Клинии.
@@ -39,7 +39,7 @@ NTPClient timeClient(ntpUDP);
 DS18B20 sensor1(16); // температура салона
 DS18B20 sensor2(17); // температура антифриза
 //======================================================================
-
+#include "esp_task_wdt.h"
 //=========================================================================================================================================== 
 #include <Wire.h>
 #define I2C_SDA 32
@@ -142,7 +142,7 @@ int portal=0; uint32_t timerwifi33;
 int RRSI; String nagrev="Откл.Нагр."; 
 bool ekrON=0; int m=0; int m1=0; int m2=18;
 const unsigned long sleepp = 5; // 30 секунд в миллисекундах
-bool slepper=0; bool menu;
+bool slepper=0; bool menu=0;
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //#define LED 2 //светодиод на gpio2
 bool on = false; //флаг состояния светодиода
@@ -207,9 +207,16 @@ enc1.tick();  // отработка в прерывании
 void setup() {
  Serial.begin(115200);Wire.begin(I2C_SDA, I2C_SCL, 100000); EEPROM.begin(500); oled.init(); oled.clear(); oled.setScale(1); oled.setContrast(200); 
  //=============================================================================================================================
-  btStop();                    // Отключаем Bluetooth
-  esp_bt_controller_disable(); // Отключаем контроллер BT
-  esp_bt_controller_deinit();  // Освобождаем память, если использовался BT
+    // Настройка конфигурации watchdog
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 15000,           // 10 секунд
+        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Все ядра
+        .trigger_panic = true,         // Сброс при зависании
+    };
+    
+    esp_task_wdt_init(&twdt_config);
+    esp_task_wdt_add(NULL);
+
 //+++++++++++++++++++++++++++++++++++++++++ Кнопки ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  enc1.setTickMode(AUTO);
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -319,14 +326,16 @@ kLineSerial.begin(baudRate, SERIAL_8N1, rxPin, txPin);
 }
 
 void loop() {  
+esp_task_wdt_reset(); // Сбрасываем watchdog 
+client.loop();
 //==================================================================== 
    if(digitalRead(19) ==0) vklweb=0; else vklweb=1;
 //======================================================================   
    if (tmr3.tick() && menu==0)  obnovl();  //  проверяем обнову
 
 //====================================================================
- if (!client.connected() && menu==0) reconnect();
-  client.loop();  
+ if (!client.connected() ) reconnect();
+   
  //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo 
  if (tmr2.tick() ) {if (Kline==0) akb(); }//timeClient.update(); menu();
  //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
@@ -347,8 +356,8 @@ switch (m) {
   case 3: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Ручное упр.     "); if (enc1.isHolded() and (m1=1))  {switch1=3;  m1=0; n=0;tone(tonePin, 1000, 1000);tone(tonePin, 2500, 100); oled.clear();} break;
   case 4: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Авто.           "); if (enc1.isHolded() and (m1=1))  {switch1=4;  m1=0; n=0;tone(tonePin, 1000, 1000);tone(tonePin, 2500, 100); oled.clear();} break;
   case 5: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Уст.темп.АВто.  "); if (enc1.isHolded() and (m1=1))  { m1=2; n=1; tone(tonePin, 2500, 200); } break;
-  case 6: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" ID "+ String(chipId));break;
-  case 7: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Reset.  "); if (enc1.isHolded() and (m1=1))  {  tone(tonePin, 2500, 200);esp_restart(); } break;
+  case 6: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" ID              "+ String(chipId));break;
+  case 7: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Reset.          "); if (enc1.isHolded() and (m1=1))  {  tone(tonePin, 2500, 200);esp_restart(); } break;
  }
  }
 if (m1==2) {
@@ -359,6 +368,8 @@ if (enc1.isHolded() and (m1==2))  { EEPROM.put(300,m2); EEPROM.commit(); EEPROM.
 }
 if (tmr8.tick()) {m1=0;n=0; menu=0; tone(tonePin, 3000, 100);tone(tonePin, 300, 500);oled.clear();}
 //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+// Реже выполняем тяжелые операции
+   
   if (Kline ==0 ) {
   //  if (sensor1.ready()) ts = sensor1.getTemp();
   //  if (sensor2.ready()) ts = sensor2.getTemp();
@@ -483,14 +494,15 @@ if(shim1 > dshim1 ) ventil=1; else ventil=0;
  ekr(); 
  oled.update(); 
  //sleep(); 
- 
+  client.loop(); 
+  esp_task_wdt_reset();
 }
 //DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
 void sleep(){ 
   if(menu) return;
   if( (slepper == 1) && (switch1 == 0) ) {
 if (tmr9.tick()) { 
-  Serial.println(" ");Serial.println("Sleep"); Serial.println(WiFi.getSleep() ? "Modem Sleep ВКЛЮЧЕН" : "Modem Sleep ВЫКЛЮЧЕН");
+  Serial.println(" ");Serial.println("Sleep"); //Serial.println(WiFi.getSleep() ? "Modem Sleep ВКЛЮЧЕН" : "Modem Sleep ВЫКЛЮЧЕН");  // вызывает завис  связи
 //esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR); 
 //esp_light_sleep_start(); // Режим легкого сна составляет около 0,8 мА.
 //esp_deep_sleep_start(); // глубокого сна Чип потребляет от 0,15 мА
@@ -502,7 +514,7 @@ void ekr(){
   if (vakb>13.7) {oled.setPower(1);slepper=0;}
   if (ekrON==0) { if (tmr6.tick()) 
      {oled.setContrast(1);} 
- if (tmr7.tick() and (vakb < 13.4)) {oled.setPower(0); slepper=1;}  //  включение ждущего режима
+ if (tmr7.tick() and (vakb < 13.7)) {oled.setPower(0); slepper=1;}  //  включение ждущего режима
  }
   if (ekrON==1) {oled.setPower(1); oled.setContrast(200); ekrON=0; }
      
@@ -565,8 +577,13 @@ void publishMessage(const char* topic, String payload , boolean retained){
 }
 //==============================================================================================================================
 void reconnect(){ 
-   
-    Serial.print("Attempting MQTT connection...");
+   static unsigned long lastAttempt = 0;
+    
+    if(millis() - lastAttempt < 5000) return; // ждем 5 секунд
+    
+    
+    
+        Serial.print("Attempting MQTT connection...");
     String clientId = "EClient-";   // Create a random client ID
     clientId += String(random(0xffff), HEX);
 
@@ -580,7 +597,7 @@ void reconnect(){
       Serial.print("failed, rc=");Serial.print(client.state());Serial.println(" try again in 5 seconds"); 
       
       } 
- // }
+ lastAttempt = millis();
 
 }
 //==============================================================================================================================
@@ -658,6 +675,8 @@ mode = Answer[sizeof(Request1)+9];
  }}
 //=======================================================================================
 void recive(int r){
+
+
    n = kLineSerial.available(); oled.setCursor(0, 6); oled.print("Rx n = "); oled.print(n);   oled.print("   r = "); oled.print(r);
  while(kLineSerial.available()) { for (int i=0;i<n;i++) Answer[i]=kLineSerial.read(); }
   //oled.setCursor(0, 7);oled.print("                                            ");oled.update();
