@@ -1,6 +1,6 @@
 // ядро ЕСП32 3.00
 #include <AutoOTA.h>
-AutoOTA ota("3.00", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
+AutoOTA ota("3.0", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
 bool obn=0;       // флаг обновления
 #define Kline 0  // берем данные из вебасты по Клинии 1. датчики внешнии 0.
 #define Rele 1   //  1 используем реле для запуска вебасты.  0 по Клинии.
@@ -143,7 +143,7 @@ int portal=0; uint32_t timerwifi33;
 int RRSI; String nagrev="Откл.Нагр."; 
 bool ekrON=0; int m=0; int m1=0; int m2=18;
 const unsigned long sleepp = 5; // 30 секунд в миллисекундах
-bool slepper=0; bool menu=0;
+bool slepper=0; bool menu=0,ob;
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //#define LED 2 //светодиод на gpio2
 bool on = false; //флаг состояния светодиода
@@ -291,11 +291,11 @@ kLineSerial.begin(baudRate, SERIAL_8N1, rxPin, txPin);
 }
 void loop() {  
 esp_task_wdt_reset(); // Сбрасываем watchdog 
-client.loop();
+client.loop(); obnovl();
 //==================================================================== 
    if(digitalRead(19) ==0) vklweb=0; else vklweb=1;
 //======================================================================   
-   if (tmr3.tick() )  obnovl();  //  проверяем обнову
+   if (tmr3.tick() ) ob=1;   //  проверяем обнову
 
 //====================================================================
  if (!client.connected() ) reconnect();
@@ -500,13 +500,14 @@ if (WiFi.status() != WL_CONNECTED) { WiFi.disconnect(); WiFi.reconnect(); }
 }
 //==============================================================================================================================
  void obnovl() { 
-  
+  if(!ob) return;
   String ver, notes;
 if (ota.checkUpdate(&ver, &notes)) { 
   oled.clear(); oled.setCursor(10, 0);oled.print(" Update Version "); oled.setCursor(45, 1);  oled.invertText(1); oled.print(ver);oled.invertText(0); 
   oled.setCursor(0, 2);oled.println(" Notes:  "); oled.print(notes); oled.update(); delay(5000); oled.clear();
-  oled.setCursor(10, 0);oled.print(" Update Begin !!!! "); oled.update();ota.updateNow();
-}}
+  oled.setCursor(10, 0);oled.print(" Update Begin !!!! "); oled.update();ota.updateNow();}
+ ob=0;
+  }
 //==============================================================================================================================
 void callback(char* topic, byte* payload, unsigned int length) { 
    
