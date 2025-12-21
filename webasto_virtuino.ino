@@ -1,6 +1,6 @@
 // ядро ЕСП32 3.00
 #include <AutoOTA.h>
-AutoOTA ota("2.05", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
+AutoOTA ota("3.00", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
 bool obn=0;       // флаг обновления
 #define Kline 0  // берем данные из вебасты по Клинии 1. датчики внешнии 0.
 #define Rele 1   //  1 используем реле для запуска вебасты.  0 по Клинии.
@@ -84,9 +84,9 @@ byte Answer[18]; // вообще говоря, в ответе 11 байт. Но
 //===========================================================================================================================================
 
 #include <TimerMs.h>
-TimerMs tmr1(2000, 1, 0);   // отправляем топики 
-TimerMs tmr2(3000, 1, 0);   // АКБ
-TimerMs tmr3(60000, 1, 0);   // обновление
+TimerMs tmr1(5000, 1, 0);   // отправляем топики 
+TimerMs tmr2(7000, 1, 0);   // АКБ
+TimerMs tmr3(180000, 1, 0);   // обновление
 TimerMs tmr4;   //  ;
 TimerMs tmr5(60000, 5, 0); 
 TimerMs tmr6(60000, 1, 0);  // притухает экран
@@ -109,11 +109,12 @@ PubSubClient client(espClient);
 //#include "GyverTimers.h"   //  https://alexgyver.ru/gyvertimers/
 
 //==============================================================================================================================
-#define VREF 3.33
-#define DIV_R1 4635
-#define DIV_R2 990
-
-
+#include "esp_adc_cal.h"
+#define VREF 3.37
+#define DIV_R1 4600
+#define DIV_R2 980
+#define AKB_PIN 36
+esp_adc_cal_characteristics_t adc_chars;
 //==============================================================================================================================
 int tonePin = 4;
 unsigned long lastMsg = 0; uint32_t sec; uint32_t timer; uint32_t minutes; uint32_t seconds; uint32_t hours; uint32_t timerwifi;
@@ -207,61 +208,9 @@ enc1.tick();  // отработка в прерывании
 void setup() {
  Serial.begin(115200);Wire.begin(I2C_SDA, I2C_SCL, 100000); EEPROM.begin(500); oled.init(); oled.clear(); oled.setScale(1); oled.setContrast(200); 
  //=============================================================================================================================
-    // Настройка конфигурации watchdog
-    esp_task_wdt_config_t twdt_config = {
-        .timeout_ms = 15000,           // 10 секунд
-        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Все ядра
-        .trigger_panic = true,         // Сброс при зависании
-    };
-    
-    esp_task_wdt_init(&twdt_config);
-    esp_task_wdt_add(NULL);
-
 //+++++++++++++++++++++++++++++++++++++++++ Кнопки ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  enc1.setTickMode(AUTO);
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//portalRun(); 
-label0:
- if(portal==0){
-   EEPROM.get(0, portalCfg.SSID); EEPROM.get(150, portalCfg.pass); WiFi.mode(WIFI_STA); WiFi.begin(portalCfg.SSID, portalCfg.pass);
-      oled.setCursor(0, 0);oled.println(portalCfg.SSID); oled.print(portalCfg.pass); oled.update(); delay(3000); oled.clear();
-      oled.setCursor(0, 3);oled.println("Подключение.");oled.update(); 
-
-  timerwifi33 = millis(); 
-  while (WiFi.status() != WL_CONNECTED) {Serial.print("."); oled.print(".");oled.update(); delay(500);
-    if((millis()-timerwifi33) > 25000) { portal=1; WiFi.disconnect(); 
-    oled.clear(); oled.setCursor(0, 0);oled.invertText(1);oled.print("  ESP-conf Start !  "); oled.update(); oled.invertText(0);goto label0;} }
-    
-  }
-if (portal==1) {
- 
-  portalRun(180000); 
-   
- 
-
- switch (portalStatus()) { 
-   
-    
-
-        case SP_SUBMIT: portal=0; EEPROM.put(0,portalCfg.SSID);EEPROM.put(150,portalCfg.pass); EEPROM.commit();
-        oled.clear();oled.setCursor(0, 0);oled.println(portalCfg.SSID);oled.print(portalCfg.pass);oled.update(); delay(3000);
-        char SSI[32]; 
-  EEPROM.get(0, SSI);oled.setCursor(0, 3);oled.println(SSI);oled.update();
-  EEPROM.get(150, SSI);oled.print(SSI);oled.update(); delay(3000);                              goto label0;  break;
-        case SP_SWITCH_AP: portal=2;WiFi.mode(WIFI_AP); WiFi.softAP("LabadaSto", "12345678");                 break;  
-        case SP_SWITCH_LOCAL: portal=0;                                                                       break;
-        case SP_EXIT:  portal=0; goto label0;                                                                 break;
-        case SP_TIMEOUT: portal=2; portal=1; WiFi.mode(WIFI_AP); WiFi.softAP("LabadaSto", "12345678");        break;
-        case SP_ERROR:   portal=1; goto label0;                                                               break;
- }
-}
-char SSI[32]; 
-  EEPROM.get(0, SSI);Serial.println(SSI);
-  EEPROM.get(150, SSI);Serial.print(SSI);  
-   
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-                               
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 randomSeed(micros());
   Serial.println("\nWiFi connected\nIP address: ");
   Serial.println(WiFi.localIP());
@@ -271,6 +220,16 @@ randomSeed(micros());
   oled.update(); delay(5000); oled.clear(); oled.update();
 //========================================================================================
   pinMode(36, INPUT);  // напряжение
+  analogReadResolution(12);
+  analogSetPinAttenuation(AKB_PIN, ADC_11db);
+
+  esp_adc_cal_characterize(
+    ADC_UNIT_1,
+    ADC_ATTEN_DB_11,
+    ADC_WIDTH_BIT_12,
+    1100,           // стандарт для Mini
+    &adc_chars);
+//------------------------------------------------------
   ini(1); 
   pinMode(22, OUTPUT); // вентилятор отопителя
   pinMode(19, OUTPUT); // вкл вебасты
@@ -293,8 +252,8 @@ randomSeed(micros());
   regulator2.setDirection(NORMAL); // ПОМПА     направление регулирования (NORMAL/REVERSE). ПО УМОЛЧАНИЮ СТОИТ NORMAL
   regulator2.setLimits(75, 250);    // пределы (ставим для 8 битного ШИМ). ПО УМОЛЧАНИЮ СТОЯТ 0 И 255
   regulator2.setpoint = 22;        // сообщаем регулятору температуру, которую он должен поддерживать 
- //===========================================================================================================================================  
-  
+//===========================================================================================================================================  
+  WIFISEL();
 //==============================================================================================================================
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
@@ -304,9 +263,6 @@ randomSeed(micros());
 //===========================================================================================================================================          
 kLineSerial.begin(baudRate, SERIAL_8N1, rxPin, txPin);
 //=========================================================================================================================================
-  
-  
-//-----------------------------------------------------------------------------------------------------
  EEPROM.get(300, tust); 
 //-------------------------- SLEEP --------------------------------------------------------------------------
  //esp_bluedroid_disable();  https://microsin.net/programming/arm/esp32-sleep-modes.html
@@ -321,17 +277,25 @@ kLineSerial.begin(baudRate, SERIAL_8N1, rxPin, txPin);
 //  timer_attachInterrupt(Flag); //настраиваем прерывание (привязка к функции)
 //  timer_write(ESP.getCycleCount() + 160000000L); //Тактовая частота 80MHz, получаем секунду
 //  interrupts();
+/////////////// Настройка конфигурации watchdog////////////////////////
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 30000,           // 10 секунд
+        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Все ядра
+        .trigger_panic = true,         // Сброс при зависании
+    };
+    
+    esp_task_wdt_init(&twdt_config);
+    esp_task_wdt_add(NULL);
+
  //----------------------------------------------------------------------------------------------------
-
 }
-
 void loop() {  
 esp_task_wdt_reset(); // Сбрасываем watchdog 
 client.loop();
 //==================================================================== 
    if(digitalRead(19) ==0) vklweb=0; else vklweb=1;
 //======================================================================   
-   if (tmr3.tick() && menu==0)  obnovl();  //  проверяем обнову
+   if (tmr3.tick() )  obnovl();  //  проверяем обнову
 
 //====================================================================
  if (!client.connected() ) reconnect();
@@ -356,7 +320,7 @@ switch (m) {
   case 3: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Ручное упр.     "); if (enc1.isHolded() and (m1=1))  {switch1=3;  m1=0; n=0;tone(tonePin, 1000, 1000);tone(tonePin, 2500, 100); oled.clear();} break;
   case 4: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Авто.           "); if (enc1.isHolded() and (m1=1))  {switch1=4;  m1=0; n=0;tone(tonePin, 1000, 1000);tone(tonePin, 2500, 100); oled.clear();} break;
   case 5: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Уст.темп.АВто.  "); if (enc1.isHolded() and (m1=1))  { m1=2; n=1; tone(tonePin, 2500, 200); } break;
-  case 6: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" ID              "+ String(chipId));break;
+  case 6: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" ID "+ String(chipId)+"     ");break;
   case 7: oled.setCursor(15, 4); oled.print(String("")+(m+1)+"."+" Reset.          "); if (enc1.isHolded() and (m1=1))  {  tone(tonePin, 2500, 200);esp_restart(); } break;
  }
  }
@@ -381,7 +345,7 @@ if (tmr8.tick()) {m1=0;n=0; menu=0; tone(tonePin, 3000, 100);tone(tonePin, 300, 
 //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
   
 //---------------------------------------------------------------------------------------------------------
- if (tmr1.tick() && menu==0) { digitalWrite(2,HIGH);
+ if (tmr1.tick() ) { digitalWrite(2,HIGH);
    RRSI= WiFi.RSSI(); EEPROM.get(300, tust); 
  publishMessage(RRSI_topic,String(RRSI),true); 
  publishMessage(ts_topic,String(ts),true);    
@@ -481,12 +445,7 @@ if( hours == 24 && switch1==4) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.
       ledcWrite(23,shim1);   // шим вентиль отопителя 400Гц
     digitalWrite(22,HIGH);  // отопитель
     digitalWrite(18,HIGH); // климат
-   
-   
-
-
-
-   }
+    }
 //--------------------------------------------------------------------------------------------------------- 
 if(shim1 > dshim1 ) ventil=1; else ventil=0;
 
@@ -497,7 +456,7 @@ if(shim1 > dshim1 ) ventil=1; else ventil=0;
   client.loop(); 
   esp_task_wdt_reset();
 }
-//DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+//====================================================================================================
 void sleep(){ 
   if(menu) return;
   if( (slepper == 1) && (switch1 == 0) ) {
@@ -511,10 +470,10 @@ if (tmr9.tick()) {
   }}}
 //==============================================================================================================================
 void ekr(){ 
-  if (vakb>13.7) {oled.setPower(1);slepper=0;}
+  if (vakb>13.7) {oled.setPower(1);slepper=0; tmr1.setTime(1000); tmr2.setTime(2000);}
   if (ekrON==0) { if (tmr6.tick()) 
      {oled.setContrast(1);} 
- if (tmr7.tick() and (vakb < 13.7)) {oled.setPower(0); slepper=1;}  //  включение ждущего режима
+ if (tmr7.tick() and (vakb < 13.7)) {oled.setPower(0); slepper=1; tmr1.setTime(5000); tmr2.setTime(7000);}  //  включение ждущего режима
  }
   if (ekrON==1) {oled.setPower(1); oled.setContrast(200); ekrON=0; }
      
@@ -602,20 +561,22 @@ void reconnect(){
 }
 //==============================================================================================================================
 void akb() {  
-   
-  v1=0;
-  for(int i =0;i<10;i++) {    v1= v1+(1.221*((float)analogRead(36) * VREF * ((DIV_R1 + DIV_R2) / DIV_R2) / 4095)); }
-   vakb = v1/10 + 0.1;    ///  0.1  поправка на провода до АКБ                                              
-  //////// v1= v1+(1.221*((float)analogRead(36) * VREF * ((DIV_R1 + DIV_R2) / DIV_R2) / 4095)); x6 =x6+1;  if (x6==15) { vakb = (v1/15)+0.1; x6=0; v1=0;}     ///  поправка на провода до АКБ
-   //vakb = (analogRead(36)*3.3)*1.0505 / 4096);
-   //vakb = (float)(3.3*analogRead(36)) / 4096;
-   //vakb =  1.205*((float)analogRead(36) * VREF * ((DIV_R1 + DIV_R2) / DIV_R2) / 4096);
-   // vakb=12.5;
-if (vakb < v)  {  batlow = 1; stroka = " Low Power STOP!  "; switch1 = 0; } else {batlow = 0; } 
-if (vakb > 15.5) { batlow = 1; stroka = " HIGH Power STOP!  "; switch1 = 0;  } else {batlow = 0; }
-
+   vakb = readAKB(); batlow = 0;
+if (vakb < v) {batlow = 1;stroka = " Low Power STOP! ";switch1 = 0;}
+    else if (vakb > 15.0) {batlow = 1;stroka = " HIGH Power STOP! ";switch1 = 0;}
 }
 //==============================================================================================================================
+float readAKB() {
+  uint32_t sum = 0;
+  for (int i = 0; i < 20; i++) {sum += analogRead(AKB_PIN);delay(2);}
+uint32_t raw = sum / 20;
+uint32_t mv  = esp_adc_cal_raw_to_voltage(raw, &adc_chars);
+
+  float vadc = mv / 1000.0;
+  float vakb = vadc * ((DIV_R1 + DIV_R2) / (float)DIV_R2);
+return vakb;
+}
+//======================================================
 void timers() { 
   
   if(x1==0){ x1=1;  timer = millis();}
@@ -722,12 +683,49 @@ n5=0;}
 }
 //=======================================================================================================================
 //============================= Прерывание по таймеру функция ===========================================
-// void Flag (void) {
-  
-// if (on) { digitalWrite(LED_BUILTIN, HIGH); on = false;} else { digitalWrite(LED_BUILTIN, LOW); on = true;}
+void WIFISEL () {
+ //portalRun(); 
+label0:
+ if(portal==0){
+   EEPROM.get(0, portalCfg.SSID); EEPROM.get(150, portalCfg.pass); WiFi.mode(WIFI_STA); WiFi.begin(portalCfg.SSID, portalCfg.pass);
+      oled.setCursor(0, 0);oled.println(portalCfg.SSID); oled.print(portalCfg.pass); oled.update(); delay(3000); oled.clear();
+      oled.setCursor(0, 3);oled.println("Подключение.");oled.update(); 
 
-// timer_write(ESP.getCycleCount() + 240000000L); //Тактовая частота 240MHz, получаем секунду
-// }
+  timerwifi33 = millis(); 
+  while (WiFi.status() != WL_CONNECTED) {Serial.print("."); oled.print(".");oled.update(); delay(500);
+    if((millis()-timerwifi33) > 25000) { portal=1; WiFi.disconnect(); 
+    oled.clear(); oled.setCursor(0, 0);oled.invertText(1);oled.print("  ESP-conf Start !  "); oled.update(); oled.invertText(0);goto label0;} }
+    
+  }
+if (portal==1) {
+ 
+  portalRun(180000); 
+   
+ 
+
+ switch (portalStatus()) { 
+   
+    
+
+        case SP_SUBMIT: portal=0; EEPROM.put(0,portalCfg.SSID);EEPROM.put(150,portalCfg.pass); EEPROM.commit();
+        oled.clear();oled.setCursor(0, 0);oled.println(portalCfg.SSID);oled.print(portalCfg.pass);oled.update(); delay(3000);
+        char SSI[32]; 
+  EEPROM.get(0, SSI);oled.setCursor(0, 3);oled.println(SSI);oled.update();
+  EEPROM.get(150, SSI);oled.print(SSI);oled.update(); delay(3000);                              goto label0;  break;
+        case SP_SWITCH_AP: portal=2;WiFi.mode(WIFI_AP); WiFi.softAP("LabadaSto", "12345678");                 break;  
+        case SP_SWITCH_LOCAL: portal=0;                                                                       break;
+        case SP_EXIT:  portal=0; goto label0;                                                                 break;
+        case SP_TIMEOUT: portal=2; portal=1; WiFi.mode(WIFI_AP); WiFi.softAP("LabadaSto", "12345678");        break;
+        case SP_ERROR:   portal=1; goto label0;                                                               break;
+ }
+}
+char SSI[32]; 
+  EEPROM.get(0, SSI);Serial.println(SSI);
+  EEPROM.get(150, SSI);Serial.print(SSI);  
+    
+
+}
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+//==============================================================
