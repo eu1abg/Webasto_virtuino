@@ -392,7 +392,7 @@ if (switch1 == 0)   // все выкл
 if ((switch1 == 2) && (batlow == 0))  // вкл только нагрев и помпа 80пр
   { 
     shim1 = 0; // печка
-    shim2 = 220; // помпа
+    shim2 = 255; // помпа
     //oooooooooooooooooooooooooooooooooooooooooooooooooooooooo
    if (Rele==1) digitalWrite(19, HIGH); else webstart();// вкл вебасты
    //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
