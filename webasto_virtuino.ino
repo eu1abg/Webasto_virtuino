@@ -1,6 +1,6 @@
 // ядро ЕСП32 3.00
 #include <AutoOTA.h>
-AutoOTA ota("3.01", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
+AutoOTA ota("4.0", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
 bool obn=0;       // флаг обновления
 #define Kline 0  // берем данные из вебасты по Клинии 1. датчики внешнии 0.
 #define Rele 1   //  1 используем реле для запуска вебасты.  0 по Клинии.
@@ -94,6 +94,7 @@ TimerMs tmr7(300000, 1, 0);   // экран откл
 TimerMs tmr8;   // выход из меню
 TimerMs tmr9((TIME_POWER_SLEEP*1000), 1, 0);   //  таймер перехода  в спящий режим
  TimerMs tmr10(30000, 1, 0); // опрос вебасты в ждущем режиме
+ TimerMs tmr11;
 // //=====================================================
 //const char* ssid = "EPS-Minsk.by";
 //const char* password = "13051973";
@@ -145,7 +146,7 @@ bool ekrON=0; int m=0; int m1=0; int m2=18;
 const unsigned long sleepp = 5; // 30 секунд в миллисекундах
 bool slepper=0; bool menu=0,ob;
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//#define LED 2 //светодиод на gpio2
+String ver, notes;
 bool on = false; //флаг состояния светодиода
 //-----------------------------------------------------------------------------------------------------------------
 
@@ -288,15 +289,16 @@ kLineSerial.begin(baudRate, SERIAL_8N1, rxPin, txPin);
     esp_task_wdt_add(NULL);
 
  //----------------------------------------------------------------------------------------------------
+ tmr11.setTimerMode();
 }
 void loop() {  
 esp_task_wdt_reset(); // Сбрасываем watchdog 
-client.loop(); obnovl();
+client.loop(); 
 //==================================================================== 
    if(digitalRead(19) ==0) vklweb=0; else vklweb=1;
 //======================================================================   
-   if (tmr3.tick() ) ob=1;   //  проверяем обнову
-
+   if (tmr3.tick() ) obnovl();  //  проверяем обнову
+   if (tmr11.tick())  ota.updateNow();
 //====================================================================
  if (!client.connected() ) reconnect();
    
@@ -347,6 +349,8 @@ if (tmr8.tick()) {m1=0;n=0; menu=0; tone(tonePin, 3000, 100);tone(tonePin, 300, 
 //---------------------------------------------------------------------------------------------------------
  if (tmr1.tick() ) { digitalWrite(2,HIGH);
    RRSI= WiFi.RSSI(); EEPROM.get(300, tust); 
+
+   if(ob==1) {stroka =" Update Version  "+ ver; }
  publishMessage(RRSI_topic,String(RRSI),true); 
  publishMessage(ts_topic,String(ts),true);    
  publishMessage(ta_topic,String(ta),true);
@@ -378,14 +382,14 @@ if (tmr8.tick()) {m1=0;n=0; menu=0; tone(tonePin, 3000, 100);tone(tonePin, 300, 
 
  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo-- 
 if (switch1 == 0)   // все выкл
-   {  vklpomp =0;  shim2 = 0; shim1=0; stop(); stroka ="Ver. "+ ota.version() +".  "+"  Сделайте выбор "; // tust = 22; stroka ="Сделайте выбор";
+   {  vklpomp =0;  shim2 = 0; shim1=0; stop(); stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор "; // tust = 22; stroka ="Сделайте выбор";
     //vkl1 =0;
     }
 //--------------------------------------------------------------------------------------------------------- 
  if ((switch1 == 1) && (batlow == 0))  // вкл подготовка к запуску
 {  digitalWrite(18,HIGH); timers(); stroka = "Подготовка 5 мин.  " + web_time;
     vklpomp =0; shim1 = 0;  shim2 = 0; ///tust = 22; //vkl1 = 1;
-   if( minutes == 5 && switch1==1) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +".  "+"  Сделайте выбор "; }
+   if( minutes == 5 && switch1==1) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор "; }
   }
 
 //-----------------------------ПРОГРЕВ---------------------------------------------------------------------------- 
@@ -403,7 +407,7 @@ if ((switch1 == 2) && (batlow == 0))  // вкл только нагрев и п�
     
    timers(); 
     stroka = "Прогр. 15 мин. " + web_time;  vklpomp = 1;
-   if( minutes == 15 && switch1==2) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +".  "+"  Сделайте выбор ";  }
+   if( minutes == 15 && switch1==2) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор ";  }
    }
 //-----------------------------------РУЧНОЕ---------------------------------------------------------------------- 
 if ((switch1== 3) && (batlow == 0))  //  вкл нагрев  помпа на регулятор и ручное управление салонным вентилятором
@@ -423,7 +427,7 @@ if ((switch1== 3) && (batlow == 0))  //  вкл нагрев  помпа на р
     digitalWrite(18,HIGH);
    
     
-if( hours == 15 && switch1==3) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +".  "+"  Сделайте выбор ";  }  
+if( hours == 15 && switch1==3) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор ";  }  
   }
 //------------------------------------AVTO--------------------------------------------------------------------- 
 if ((switch1 == 4) && (batlow == 0)) // авто
@@ -438,7 +442,7 @@ if ((switch1 == 4) && (batlow == 0)) // авто
    if (ta < 35 ) tz=0; 
    timers();
     
-if( hours == 24 && switch1==4) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +".  "+"  Сделайте выбор ";  }
+if( hours == 24 && switch1==4) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор ";  }
 //............................................................................
 
       ledcWrite(21,shim2);  // шим помпа
@@ -470,6 +474,7 @@ if (tmr9.tick()) {
   }}}
 //==============================================================================================================================
 void ekr(){ 
+  if(ob) return;
   if (vakb>13.7) {oled.setPower(1);slepper=0; tmr1.setTime(1000); tmr2.setTime(2000);}
   if (ekrON==0) { if (tmr6.tick()) 
      {oled.setContrast(1);} 
@@ -500,13 +505,13 @@ if (WiFi.status() != WL_CONNECTED) { WiFi.disconnect(); WiFi.reconnect(); }
 }
 //==============================================================================================================================
  void obnovl() { 
-  if(!ob) return;
-  String ver, notes;
-if (ota.checkUpdate(&ver, &notes)) { 
+  //if(!ob) return;
+  
+if (ota.checkUpdate(&ver, &notes)) {  tmr11.setTime(5000); tmr11.start();
   oled.clear(); oled.setCursor(10, 0);oled.print(" Update Version "); oled.setCursor(45, 1);  oled.invertText(1); oled.print(ver);oled.invertText(0); 
-  oled.setCursor(0, 2);oled.println(" Notes:  "); oled.print(notes); oled.update(); delay(5000); oled.clear();
-  oled.setCursor(10, 0);oled.print(" Update Begin !!!! "); oled.update();ota.updateNow();}
- ob=0;
+  oled.setCursor(0, 2);oled.println(" Notes:  "); oled.print(notes); oled.update(); delay(1000); oled.clear();
+  oled.setCursor(10, 0);oled.print(" Update Begin !!!! "); oled.update(); ob=1;  }
+ 
   }
 //==============================================================================================================================
 void callback(char* topic, byte* payload, unsigned int length) { 
