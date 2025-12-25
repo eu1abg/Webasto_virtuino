@@ -7,10 +7,10 @@
     {
       "chipFamily": "ESP32",
       "parts": [
-        {
-          "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/firmware.bin",
-          "offset": 0
-        }
+        { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino_VSC.ino.bootloader.bin", "offset": 23664 },
+        { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino_VSC.ino.partitions.bin", "offset": 3072 },
+        { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/boot_app0.bin", "offset": 8192 },
+        { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/webasto_virtuino_VSC.ino.bin", "offset": 1119136 }
       ]
     }
   ]
