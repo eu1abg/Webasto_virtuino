@@ -3,5 +3,6 @@
   "version": 2,
   "host": "raw.githubusercontent.com",
   "port": 443,
-  "bin": "/eu1abg/Webasto_virtuino/main/firmware/firmware.bin"
+  "bin": "/eu1abg/Webasto_virtuino/main/firmware/firmware.bin",
+  "description": "Test OTA update v2"
 }
