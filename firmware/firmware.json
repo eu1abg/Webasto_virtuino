@@ -1,7 +1,16 @@
 {
   "type": "esp32-fota-http",
   "version": 2,
+  "version_str": "1.1.0",
+  "date": "2024-01-15",
   "host": "raw.githubusercontent.com",
   "port": 443,
-  "bin": "/eu1abg/Webasto_virtuino/main/firmware/firmware.bin"
+  "bin": "/eu1abg/Webasto_virtuino/main/firmware/firmware.bin",
+  "description": "Исправлены ошибки подключения к Wi-Fi",
+  "mandatory": false,
+  "changelog": [
+    "Добавлена поддержка датчика температуры",
+    "Улучшена стабильность OTA-обновлений",
+    "Оптимизировано энергопотребление"
+  ]
 }
