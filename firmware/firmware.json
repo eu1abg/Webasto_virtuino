@@ -1,8 +1,5 @@
 {
   "type": "esp32-fota-http",
   "version": 4,
-  "host": "raw.githubusercontent.com",
-  "port": 443,
-  "bin": "/eu1abg/Webasto_virtuino/main/firmware/firmware.bin",
-  "description": "Test OTA update v2"
+  "url": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.bin"
 }
