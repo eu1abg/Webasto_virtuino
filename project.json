@@ -7,7 +7,9 @@
     {
       "chipFamily": "ESP32",
       "parts": [
-        { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/target.bin", "offset": 0 }
+        { "path": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/bin/target.bin",
+          "offset": 0
+        }
         
       ]
     }
