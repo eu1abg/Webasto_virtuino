@@ -1,9 +1,5 @@
 {
-  "Configurations": [
-    {
-      "Version": "2.0",
-      "URL": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.bin"
-    }
-  ]
+  "version": "2.0",
+  "url": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.bin"
 }
 
