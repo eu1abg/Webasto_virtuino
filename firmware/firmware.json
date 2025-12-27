@@ -1,5 +1,5 @@
 {
-  "type": "esp32-fota-http",
-  "version": 10,
-  "url": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.bin"
+"version": "10.1.0",
+"notes": "Исправлены ошибки, улучшена стабильность",
+"bin": "https://yourserver.com/firmware.bin"
 }
