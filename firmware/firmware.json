@@ -1,5 +1,5 @@
 {
 "version": "10.1.0",
 "notes": "Исправлены ошибки, улучшена стабильность",
-"bin": "https://yourserver.com/firmware.bin"
+"bin": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.bin"
 }
