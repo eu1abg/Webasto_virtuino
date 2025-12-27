@@ -1,7 +1,7 @@
 {
   "type": "esp32-device",
   "version": "10.1.0",
-  "bin": "https://github.com/eu1abg/Webasto_virtuino/releases/download/v1.1.0/firmware.bin",
+  "bin": "https://github.com/eu1abg/Webasto_virtuino/firmware/firmware.bin",
   "size": 1234567,
   "hash": "sha256:abc123def456...",
   "notes": "Added new features, fixed bugs"
