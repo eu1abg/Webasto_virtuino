@@ -2,7 +2,7 @@
 
 ![ESP32](https://img.shields.io/badge/ESP32-3.00-blue.svg)
 ![MQTT](https://img.shields.io/badge/MQTT-поддержка-green.svg)
-![AutoOTA](https://img.shields.io/badge/AutoOTA-2.02-yellow.svg)
+![AutoOTA](https://img.shields.io/badge/AvtoFotaNew-1.00-yellow.svg)
 ![License](https://img.shields.io/badge/Лицензия-MIT-orange.svg)
 
 **Умная система управления предпусковым подогревателем Webasto** на базе ESP32 с поддержкой дистанционного управления через MQTT, автоматического поддержания температуры и нескольких режимов работы.
