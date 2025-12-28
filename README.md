@@ -1,6 +1,6 @@
 # LabadaSto: Система управления предпусковым подогревателем Webasto с ESP32
 
-![ESP32](https://img.shields.io/badge/ESP32-3.00-blue.svg)
+![ESP32](https://img.shields.io/badge/ESP32-3.5.5-blue.svg)
 ![MQTT](https://img.shields.io/badge/MQTT-поддержка-green.svg)
 ![AutoOTA](https://img.shields.io/badge/AvtoFotaNew-1.00-yellow.svg)
 ![License](https://img.shields.io/badge/Лицензия-MIT-orange.svg)
