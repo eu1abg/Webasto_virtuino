@@ -1,6 +1,6 @@
 {
   "type": "esp32-device",
-  "version": "3.012",
+  "version": "3.0",
   "bin": "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.bin",
   "size": 1234567,
   "hash": "sha256:abc123def456...",
