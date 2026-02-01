@@ -1,9 +1,15 @@
-// ядро ЕСП32 3.00
-#include <AutoOTA.h>
-AutoOTA ota("2.2", "eu1abg/Webasto_virtuino"); // eu1abg/Webasto_virtuino   https://github.com/GyverLibs/AutoOTA
+#include <Arduino.h>
+//-------------------------------------------------------
+#include <ArduinoJson.h>
+#include <AvtoFotaNew.h>
+const char* MANIFEST_URL = "https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.json";
+AvtoFotaNew fota("3.018");
+bool otaStarted = false;
+//-------------------------------------------------------------------  
 bool obn=0;       // флаг обновления
 #define Kline 0  // берем данные из вебасты по Клинии 1. датчики внешнии 0.
 #define Rele 1   //  1 используем реле для запуска вебасты.  0 по Клинии.
+#define timePOMP 2   //  2 минуты поппа продолжает работать после выкл вебасты
 #define dshim1 5   //  5 используем для настройки нуля печки мотор
 
 #define uS_TO_S_FACTOR 1000000ULL  /* преобразуем микросек в сек*/
@@ -23,23 +29,29 @@ GyverPID regulator2(2, 1, 0.1);  // Помпа
 #include <PubSubClient.h>
 #include <WiFiClient.h>
 //===========================================================================================================================================
-#include <NTPClient_Generic.h>          // https://github.com/khoih-prog/NTPClient_Generic
-#include <WiFiUdp.h>
-WiFiUDP ntpUDP;
- #define TIME_ZONE_OFFSET_HRS            (3)
-#define SECS_IN_HR                (3600L)
-NTPClient timeClient(ntpUDP);
+// #include <NTPClient_Generic.h>          // https://github.com/khoih-prog/NTPClient_Generic
+// #include <WiFiUdp.h>
+// WiFiUDP ntpUDP;
+//  #define TIME_ZONE_OFFSET_HRS            (3)
+// #define SECS_IN_HR                (3600L)
+// NTPClient timeClient(ntpUDP);
 //=========================================================================================================================================== 
 #include "esp_bt.h"
 #include "esp_chip_info.h"
 
 //=============================================================================================================
-
+#include <OneWire.h>
 #include <DS18B20.h>
 DS18B20 sensor1(16); // температура салона
 DS18B20 sensor2(17); // температура антифриза
+//OneWire oneWire1(16); // Создаем объект шины 1-Wire на пине 16
+//OneWire oneWire2(17); // Создаем объект шины 1-Wire на пине 17
+//DallasTemperature sensor1(&oneWire1); // Передаем указатель на объект OneWire
+//DallasTemperature sensor2(&oneWire2); // Передаем указатель на объект OneWire
+
 //======================================================================
 #include "esp_task_wdt.h"
+#define WDT_TIMEOUT 600 // секунд — оптимально
 //=========================================================================================================================================== 
 #include <Wire.h>
 #define I2C_SDA 32
@@ -53,13 +65,14 @@ GyverOLED<SSH1106_128x64> oled;
 #define SW 33
 #include "GyverEncoder.h"
 Encoder enc1(CLK, DT, SW);
+
 //===========================================================================================================================================
 #include <HardwareSerial.h>
 HardwareSerial kLineSerial(1);
 
 const int baudRate = 10400;  // Скорость для K-Line 10400
 const int rxPin = 14;        // Пин для приема данных K-Line
-const int txPin = 34;        // Пин для передачи данных K-Line
+const int txPin = 27;        // Пин для передачи данных K-Line
 
   byte Wakeup[] = {0x81, 0x51, 0xF1, 0xA1, 0x64};
    byte Init1[] = {0x81, 0x51, 0xF1, 0x81, 0x44};
@@ -84,9 +97,9 @@ byte Answer[18]; // вообще говоря, в ответе 11 байт. Но
 //===========================================================================================================================================
 
 #include <TimerMs.h>
-TimerMs tmr1(5000, 1, 0);   // отправляем топики 
-TimerMs tmr2(7000, 1, 0);   // АКБ
-TimerMs tmr3(180000, 1, 0);   // обновление
+TimerMs tmr1(3000, 1, 0);   // отправляем топики 
+TimerMs tmr2(5000, 1, 0);   // АКБ
+TimerMs tmr3(300000, 1, 0);   // обновление
 TimerMs tmr4;   //  ;
 TimerMs tmr5(60000, 5, 0); 
 TimerMs tmr6(60000, 1, 0);  // притухает экран
@@ -94,7 +107,8 @@ TimerMs tmr7(300000, 1, 0);   // экран откл
 TimerMs tmr8;   // выход из меню
 TimerMs tmr9((TIME_POWER_SLEEP*1000), 1, 0);   //  таймер перехода  в спящий режим
  TimerMs tmr10(30000, 1, 0); // опрос вебасты в ждущем режиме
- TimerMs tmr11;
+ TimerMs tmr11(48*1000*3600, 1, 0); // вочдог
+ TimerMs tmr12; // вочдог
 // //=====================================================
 //const char* ssid = "EPS-Minsk.by";
 //const char* password = "13051973";
@@ -129,8 +143,8 @@ int n1 = 0;    // счетчик
 int n2 = 0;  // счетчик 
 float vakb ;   //  измеряемое напряжение
 float v1;
-float v = 10.7; // порог напряжения 10.710
-float v2 = 11.7; // верхний порог напряжения 11.7
+float v = 10.2; // порог напряжения 10.710
+float v2 = 11.0; // верхний порог напряжения 11.7
 int batlow ; int vklweb; int vklpomp; int switch1; String web_time; String stroka; int vkl1; int tz=0;
 //--------------------------------------------------
 float R1=0; float R2=0;   int mode=0;
@@ -139,14 +153,15 @@ int shift; int nagn; int pomp; int tpomp; int ign; int sostweb;
 //--------------------------------------------------
 //int timer = 900; // время авто выключения
 //int timer1 = 120; // время подготовки
-char buffer[100]; bool x=0; bool x1=0; int x6=0; int tust; bool ventil;
+  bool x=0; bool x1=0; int x6=0; int tust; bool ventil;
 int portal=0; uint32_t timerwifi33;
 int RRSI; String nagrev="Откл.Нагр."; 
 bool ekrON=0; int m=0; int m1=0; int m2=18;
 const unsigned long sleepp = 5; // 30 секунд в миллисекундах
-bool slepper=0; bool menu=0,ob;
+bool slepper=0; bool menu=0,ob, buf,timerpomp;
+char buffer[100];
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-String ver, notes;
+String ver1, notes1,str1,str2;
 bool on = false; //флаг состояния светодиода
 //-----------------------------------------------------------------------------------------------------------------
 
@@ -195,57 +210,87 @@ tust1_top = String(chipId)+"/"+"web_tust1";       tust1_topic = tust1_top.c_str(
 }
 //===================================================================
 void __attribute__((constructor)) beforeSetup() {preSetupChipId();}
-//=====================================================================
-
-
+void preSetupChipId();
+void setup();
+void loop();
+void sleep();
+void ekr();
+void rekonektt();
+void obnovl();
+void callback(char* topic, byte* payload, unsigned int length);
+void publishMessage(const char* topic, String payload, boolean retained);
+void reconnect();
+void akb();
+float readAKB();
+void timers();
+void stop();
+void webstop();
+void webstart();
+void data(int n3);
+void recive(int r);
+void data1(int n4);
+void ini(int n5);
+void WIFISEL();
 
 //=======================ПРЕРЫВАНИЕ апаратное по 12 ноге ================================================
-IRAM_ATTR void myIsr() {
-enc1.tick();  // отработка в прерывании
 
+IRAM_ATTR void myIsr() {
+ enc1.tick();  // отработка в прерывании
 }
 //==============================================================================================================================
 
 void setup() {
  Serial.begin(115200);Wire.begin(I2C_SDA, I2C_SCL, 100000); EEPROM.begin(500); oled.init(); oled.clear(); oled.setScale(1); oled.setContrast(200); 
  //=============================================================================================================================
+  WIFISEL();
+// Настройка FOTA
+ fota.setManifestURL(MANIFEST_URL);
+ fota.setDebug(true);
+// 🔥 ВОТ КЛЮЧЕВОЕ
+  fota.setProgressCallback([](uint8_t p) {
+    Serial.printf("OTA progress: %d%%\n", p);
+  oled.setCursor(55, 2);oled.print(p);oled.print("%");oled.update();
+  if(p == 0)   str1 = "Download Udate.    ";
+     if(p<100) stroka = " "+ str1 + p +"  %";
+    if (p == 100) stroka = " Installing !!! ";   
+  
+ 
+   publishMessage(stroka_topic,stroka.c_str(),true);
+  });
 //+++++++++++++++++++++++++++++++++++++++++ Кнопки ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  enc1.setTickMode(AUTO);
+// enc1.setType(TYPE2);  // Тип энкодера: 1 импульс на шаг
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 randomSeed(micros());
   Serial.println("\nWiFi connected\nIP address: ");
   Serial.println(WiFi.localIP());
   oled.setCursor(15, 0);oled.print(" WiFi.localIP ");oled.setCursor(15, 1);oled.print(WiFi.localIP());
-  oled.setCursor(0, 3);oled.print(" Labadasto Version "); oled.setCursor(45, 4);  oled.invertText(1); oled.print(ota.version());oled.invertText(0);
+  oled.setCursor(0, 3);oled.print(" Labadasto Version "); oled.setCursor(45, 4);  oled.invertText(1); oled.print(fota.getVER());
+  oled.invertText(0);
     oled.setCursor(10, 6);oled.print(" Chip ID:"); oled.print(chipId);
   oled.update(); delay(5000); oled.clear(); oled.update();
 //========================================================================================
   pinMode(36, INPUT);  // напряжение
   analogReadResolution(12);
   analogSetPinAttenuation(AKB_PIN, ADC_11db);
-
-  esp_adc_cal_characterize(
-    ADC_UNIT_1,
-    ADC_ATTEN_DB_11,
-    ADC_WIDTH_BIT_12,
-    1100,           // стандарт для Mini
-    &adc_chars);
+  esp_adc_cal_characterize(ADC_UNIT_1,ADC_ATTEN_DB_12,ADC_WIDTH_BIT_12,1100,&adc_chars);
 //------------------------------------------------------
-  ini(1); 
+ 
   pinMode(22, OUTPUT); // вентилятор отопителя
   pinMode(19, OUTPUT); // вкл вебасты
   pinMode(18, OUTPUT);  // выкл климат и вкл шим климат
-  pinMode(21, OUTPUT); //ledcAttachPin(21, 1);  // шим помпа
-  pinMode(23, OUTPUT); //ledcAttachPin(23, 2);  // шим вентиль отопителя 400Гц
-
+  pinMode(21, OUTPUT);//ledcAttachPin(21, 1);  // шим помпа
+  pinMode(23, OUTPUT);//ledcAttachPin(23, 2);  // шим вентиль отопителя 400Гц
   pinMode(33, INPUT_PULLUP);  // кнопка вкл ручное управление
   //pinMode(16, INPUT);  // t1
   //pinMode(17, INPUT);  // t2
   pinMode(2, OUTPUT);  //  светодиод режим
-
+  pinMode(14, INPUT);
+  pinMode(34, INPUT);
+  pinMode(27, OUTPUT);
   //ledcSetup(1, 1000, 8); ledcSetup(2, 400, 8);
   ledcAttach(21, 1000, 8); ledcAttach(23, 400, 8);
-  
+   if (Kline ==1 ) ini(1); 
   regulator1.setDirection(NORMAL); // ПЕЧКА   направление регулирования (NORMAL/REVERSE). ПО УМОЛЧАНИЮ СТОИТ NORMAL
   regulator1.setLimits(20, 100);    // пределы (ставим для 8 битного ШИМ). ПО УМОЛЧАНИЮ СТОЯТ 0 И 255
   regulator1.setpoint = 22;        // сообщаем регулятору температуру, которую он должен поддерживать 
@@ -254,53 +299,41 @@ randomSeed(micros());
   regulator2.setLimits(75, 250);    // пределы (ставим для 8 битного ШИМ). ПО УМОЛЧАНИЮ СТОЯТ 0 И 255
   regulator2.setpoint = 22;        // сообщаем регулятору температуру, которую он должен поддерживать 
 //===========================================================================================================================================  
-  WIFISEL();
-//==============================================================================================================================
+ //==============================================================================================================================
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
-  
-  //==============================================================================================================================
+//==============================================================================================================================
   tone(tonePin, 783, 200);
 //===========================================================================================================================================          
 kLineSerial.begin(baudRate, SERIAL_8N1, rxPin, txPin);
 //=========================================================================================================================================
  EEPROM.get(300, tust); 
-//-------------------------- SLEEP --------------------------------------------------------------------------
- //esp_bluedroid_disable();  https://microsin.net/programming/arm/esp32-sleep-modes.html
- //esp_bt_controller_disable();
- //esp_sleep_enable_wifi_wakeup(); // Разрешает пробуждение от WiFi MAC.
-
- attachInterrupt(33, myIsr, CHANGE); // прерывание по кнопке
- esp_sleep_enable_ext0_wakeup(GPIO_NUM_33,0); //1 = High, 0 = Low  пробуждение от сна    по кнопке
+// attachInterrupt(33, myIsr, CHANGE); // прерывание по кнопке
+ //esp_sleep_enable_ext0_wakeup(GPIO_NUM_33,0); //1 = High, 0 = Low  пробуждение от сна    по кнопке
 //-------------------------- прерывание по таймеру встроеному не зависит от проца  ---------------------------------------------------------------------
-//  noInterrupts();
-//  timer_isr_init(); //
-//  timer_attachInterrupt(Flag); //настраиваем прерывание (привязка к функции)
-//  timer_write(ESP.getCycleCount() + 160000000L); //Тактовая частота 80MHz, получаем секунду
-//  interrupts();
 /////////////// Настройка конфигурации watchdog////////////////////////
-    esp_task_wdt_config_t twdt_config = {
-        .timeout_ms = 30000,           // 10 секунд
-        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Все ядра
-        .trigger_panic = true,         // Сброс при зависании
-    };
-    
-    esp_task_wdt_init(&twdt_config);
+    esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = WDT_TIMEOUT * 1000, // конвертируем секунды в миллисекунды
+    .idle_core_mask = 0, // Следим за всеми ядрами (битовая маска)
+    .trigger_panic = true, // Заменить на true для перезагрузки при срабатывании
+};
+    esp_task_wdt_init(&wdt_config);
     esp_task_wdt_add(NULL);
+//-----------------------------------------------------------------------------------
 
- //----------------------------------------------------------------------------------------------------
- tmr11.setTimerMode();
+tmr12.setTimerMode();tmr8.setTimerMode();
+
 }
 void loop() {  
-esp_task_wdt_reset(); // Сбрасываем watchdog 
-client.loop(); 
+  if (WiFi.status() == WL_CONNECTED){  if (!client.connected()) reconnect(); client.loop(); if (tmr3.tick() ) ob=1;  obnovl(); }
 //==================================================================== 
    if(digitalRead(19) ==0) vklweb=0; else vklweb=1;
 //======================================================================   
-   if (tmr3.tick() ) obnovl();  //  проверяем обнову
-   if (tmr11.tick())  ota.updateNow();
+   if (tmr12.tick() )  {shim2 = 0;ledcWrite(21,shim2); vklpomp =0;}
+  // if (tmr11.tick() ) esp_restart(); 
 //====================================================================
- if (!client.connected() ) reconnect();
+enc1.tick();
+
    
  //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo 
  if (tmr2.tick() ) {if (Kline==0) akb(); }//timeClient.update(); menu();
@@ -337,20 +370,15 @@ if (tmr8.tick()) {m1=0;n=0; menu=0; tone(tonePin, 3000, 100);tone(tonePin, 300, 
 // Реже выполняем тяжелые операции
    
   if (Kline ==0 ) {
-  //  if (sensor1.ready()) ts = sensor1.getTemp();
-  //  if (sensor2.ready()) ts = sensor2.getTemp();
-   ts = sensor1.getTempC();  ta = sensor2.getTempC();
-    }
-      else {  //if (sensor1.ready()) ts = sensor1.getTemp();
-        ts = sensor1.getTempC();
+ts = sensor1.getTempC();  ta = sensor2.getTempC();
+    }else {  ts = sensor1.getTempC();
           if (slepper==0)  data(1); else if (tmr10.tick()) data(1); }     // в ждущем режиме опрос кдинии по таймеру 10
 //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
   
 //---------------------------------------------------------------------------------------------------------
- if (tmr1.tick() ) { digitalWrite(2,HIGH);
+ if (tmr1.tick() && ob==0 ) { digitalWrite(2,HIGH);
    RRSI= WiFi.RSSI(); EEPROM.get(300, tust); 
-
-   if(ob==1) {stroka =" Update Version  "+ ver; }
+/// if(ob==1) {stroka =" Update Version  "+ ver1; }
  publishMessage(RRSI_topic,String(RRSI),true); 
  publishMessage(ts_topic,String(ts),true);    
  publishMessage(ta_topic,String(ta),true);
@@ -382,14 +410,18 @@ if (tmr8.tick()) {m1=0;n=0; menu=0; tone(tonePin, 3000, 100);tone(tonePin, 300, 
 
  //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo-- 
 if (switch1 == 0)   // все выкл
-   {  vklpomp =0;  shim2 = 0; shim1=0; stop(); stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор "; // tust = 22; stroka ="Сделайте выбор";
-    //vkl1 =0;
-    }
+   {    shim1=0; x1=0; stop(); stroka ="Ver. "+fota.getVER()+"  "+"  Сделайте выбор "; // tust = 22; stroka ="Сделайте выбор";
+ if(timerpomp==1) {  tmr12.setTime(timePOMP * 60000);tmr12.start(); timerpomp=0; shim2 = 125; ledcWrite(21,shim2);vklpomp =1; }
+
+ 
+ 
+ } 
 //--------------------------------------------------------------------------------------------------------- 
  if ((switch1 == 1) && (batlow == 0))  // вкл подготовка к запуску
-{  digitalWrite(18,HIGH); timers(); stroka = "Подготовка 5 мин.  " + web_time;
+{  digitalWrite(18,HIGH); timers(); stroka = "Подготовка 5 мин.  " + web_time; buf=1;
     vklpomp =0; shim1 = 0;  shim2 = 0; ///tust = 22; //vkl1 = 1;
-   if( minutes == 5 && switch1==1) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор "; }
+   if( minutes == 5 && switch1==1) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+fota.getVER()+"  "+"  Сделайте выбор "; 
+  }
   }
 
 //-----------------------------ПРОГРЕВ---------------------------------------------------------------------------- 
@@ -397,6 +429,8 @@ if ((switch1 == 2) && (batlow == 0))  // вкл только нагрев и п�
   { 
     shim1 = 0; // печка
     shim2 = 255; // помпа
+    buf=1;
+    if(timerpomp==0) timerpomp=1;
     //oooooooooooooooooooooooooooooooooooooooooooooooooooooooo
    if (Rele==1) digitalWrite(19, HIGH); else webstart();// вкл вебасты
    //ooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
@@ -407,12 +441,15 @@ if ((switch1 == 2) && (batlow == 0))  // вкл только нагрев и п�
     
    timers(); 
     stroka = "Прогр. 15 мин. " + web_time;  vklpomp = 1;
-   if( minutes == 15 && switch1==2) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор ";  }
-   }
+   if( minutes == 15 && switch1==2) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+fota.getVER()+"  "+"  Сделайте выбор ";
+    }
+   }//+ ota.version() 
 //-----------------------------------РУЧНОЕ---------------------------------------------------------------------- 
 if ((switch1== 3) && (batlow == 0))  //  вкл нагрев  помпа на регулятор и ручное управление салонным вентилятором
-  {  stroka = " Ручное управление " + web_time;  vklpomp = 1;
-
+  {  stroka = " Ручное управление " + web_time; 
+     vklpomp = 1;
+     buf=1;
+    if(timerpomp==0) timerpomp=1;
     if ( (ta < 69) && (tz==0) ) {shim2 = 250; if (Rele==1) {digitalWrite(19,HIGH);}else webstart(); }
             
       else { if (Rele==1) {digitalWrite(19,LOW); } else {webstop();}  tz=1; regulator2.setpoint = tust+3; regulator2.input = ts; shim2 = regulator2.getResultTimer();}
@@ -427,11 +464,17 @@ if ((switch1== 3) && (batlow == 0))  //  вкл нагрев  помпа на р
     digitalWrite(18,HIGH);
    
     
-if( hours == 15 && switch1==3) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор ";  }  
-  }
+if( hours == 15 && switch1==3) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+fota.getVER()+"  "+"  Сделайте выбор "; 
+ }  
+  }//+ ota.version() 
 //------------------------------------AVTO--------------------------------------------------------------------- 
 if ((switch1 == 4) && (batlow == 0)) // авто
-   {   stroka = " Автоматика " + web_time;  vklpomp = 1; regulator2.input = ts;   regulator2.setpoint = tust; 
+   {   stroka = " Автоматика " + web_time;
+       buf=1;
+       vklpomp = 1;
+      if(timerpomp==0) timerpomp=1;
+      regulator2.input = ts;
+      regulator2.setpoint = tust; 
  
   if (ta < 30 ) {shim1 = 25;}
     else {   regulator1.input = ts; regulator1.setpoint = tust; shim1 = regulator1.getResultTimer();}
@@ -442,8 +485,9 @@ if ((switch1 == 4) && (batlow == 0)) // авто
    if (ta < 35 ) tz=0; 
    timers();
     
-if( hours == 24 && switch1==4) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.version() +"  "+"  Сделайте выбор ";  }
-//............................................................................
+if( hours == 24 && switch1==4) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+fota.getVER()+"  "+"  Сделайте выбор "; 
+ }
+//............................................................................+ ota.version() 
 
       ledcWrite(21,shim2);  // шим помпа
       ledcWrite(23,shim1);   // шим вентиль отопителя 400Гц
@@ -453,32 +497,20 @@ if( hours == 24 && switch1==4) {stop(); switch1 = 0; x1=0; stroka ="Ver. "+ ota.
 //--------------------------------------------------------------------------------------------------------- 
 if(shim1 > dshim1 ) ventil=1; else ventil=0;
 
- if (tmr5.tick()) {rekonektt();}
- ekr(); 
- oled.update(); 
- //sleep(); 
-  client.loop(); 
-  esp_task_wdt_reset();
+ //if (tmr5.tick()) {rekonektt();}
+ekr(); 
+oled.update(); 
+esp_task_wdt_reset();
 }
-//====================================================================================================
-void sleep(){ 
-  if(menu) return;
-  if( (slepper == 1) && (switch1 == 0) ) {
-if (tmr9.tick()) { 
-  Serial.println(" ");Serial.println("Sleep"); //Serial.println(WiFi.getSleep() ? "Modem Sleep ВКЛЮЧЕН" : "Modem Sleep ВЫКЛЮЧЕН");  // вызывает завис  связи
-//esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR); 
-//esp_light_sleep_start(); // Режим легкого сна составляет около 0,8 мА.
-//esp_deep_sleep_start(); // глубокого сна Чип потребляет от 0,15 мА
-//WiFi.setSleep(true);
-//WiFi.setSleep(false);  // ОТКЛЮЧАЕМ режим сна модема
-  }}}
+
 //==============================================================================================================================
 void ekr(){ 
+  esp_task_wdt_reset();
   if(ob) return;
   if (vakb>13.7) {oled.setPower(1);slepper=0; tmr1.setTime(1000); tmr2.setTime(2000);}
   if (ekrON==0) { if (tmr6.tick()) 
      {oled.setContrast(1);} 
- if (tmr7.tick() and (vakb < 13.7)) {oled.setPower(0); slepper=1; tmr1.setTime(5000); tmr2.setTime(7000);}  //  включение ждущего режима
+ if (tmr7.tick() and (vakb < 13.7)) {oled.setPower(0); slepper=1; tmr1.setTime(3000); tmr2.setTime(5000);}  //  включение ждущего режима
  }
   if (ekrON==1) {oled.setPower(1); oled.setContrast(200); ekrON=0; }
      
@@ -491,31 +523,42 @@ void ekr(){
     oled.roundRect(0, 42, 62, 61,OLED_STROKE); oled.roundRect(64, 42, 127, 61,OLED_STROKE);
     //oled.update();
     }
-    else { 
-
-    
-    
-   
-    }
+  
 }
 //==============================================================================================================================
 void rekonektt() { 
-  
+ 
 if (WiFi.status() != WL_CONNECTED) { WiFi.disconnect(); WiFi.reconnect(); }
 }
-//==============================================================================================================================
- void obnovl() { 
-  //if(!ob) return;
-  
-if (ota.checkUpdate(&ver, &notes)) {  tmr11.setTime(5000); tmr11.start();
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+// //==============================================================================================================================
+  void obnovl() { 
+   if(!ob) return;
+   //Serial.println("Проверка обновы"); 
+   esp_task_wdt_delete(NULL);   // ⛔ отключаем WDT ДО OTA
+// //----------------------------------------------------------------------------------------------------
+if (fota.getchekupdate()) { oled.setPower(1); tone(tonePin, 2000, 1000);
+  String ver, notes;
+  fota.getupdate(ver, notes); ver1=ver;
+
+    Serial.println("=== UPDATE AVAILABLE ===");
+    Serial.print("New version : "); Serial.println(ver);
+    Serial.print("Notes       : "); Serial.println(notes);
+    otaStarted = true;
   oled.clear(); oled.setCursor(10, 0);oled.print(" Update Version "); oled.setCursor(45, 1);  oled.invertText(1); oled.print(ver);oled.invertText(0); 
-  oled.setCursor(0, 2);oled.println(" Notes:  "); oled.print(notes); oled.update(); delay(1000); oled.clear();
-  oled.setCursor(10, 0);oled.print(" Update Begin !!!! "); oled.update(); ob=1;  }
- 
-  }
+  oled.setCursor(0, 2);oled.println(" Notes:  "); oled.print(notes); oled.update(); delay(3000); oled.clear();
+  oled.setCursor(10, 0);oled.print(" Update Begin !!!! "); oled.update(); ob=1; 
+
+ tone(tonePin, 800, 3000);
+ fota.updateNOW(true); 
+} 
+ else {ob=0;}
+ esp_task_wdt_add(NULL);
+}  
 //==============================================================================================================================
 void callback(char* topic, byte* payload, unsigned int length) { 
-   
+  esp_task_wdt_reset();
   String incommingMessage = "";
 
       for (int i = 0; i < length; i++) incommingMessage+=(char)payload[i];
@@ -533,20 +576,22 @@ void callback(char* topic, byte* payload, unsigned int length) {
      if (strcmp(topic,tust1_topic) == 0) { tust = incommingMessage.toInt(); EEPROM.put(300,tust); EEPROM.commit(); }  ////tust = incommingMessage.toInt();
   //Serial.print("switch1 =  "); Serial.println(switch1);
   //Serial.print("edit1 =  "); Serial.println(edit1);
+  esp_task_wdt_reset();
   }
 //==============================================================================================================================
 void publishMessage(const char* topic, String payload , boolean retained){
-   
+ esp_task_wdt_reset();
   if (client.publish(topic, payload.c_str(), true))
       Serial.println("Message publised ["+String(topic)+"]: "+payload);
+ esp_task_wdt_reset();   
 }
 //==============================================================================================================================
 void reconnect(){ 
    static unsigned long lastAttempt = 0;
-    
+  esp_task_wdt_reset();
     if(millis() - lastAttempt < 5000) return; // ждем 5 секунд
     
-    
+
     
         Serial.print("Attempting MQTT connection...");
     String clientId = "EClient-";   // Create a random client ID
@@ -563,28 +608,31 @@ void reconnect(){
       
       } 
  lastAttempt = millis();
-
+esp_task_wdt_reset();
 }
 //==============================================================================================================================
 void akb() {  
    vakb = readAKB(); batlow = 0;
+   //vakb=13.8; // TEST
 if (vakb < v) {batlow = 1;stroka = " Low Power STOP! ";switch1 = 0;}
     else if (vakb > 15.0) {batlow = 1;stroka = " HIGH Power STOP! ";switch1 = 0;}
+
+   
 }
 //==============================================================================================================================
 float readAKB() {
-  uint32_t sum = 0;
-  for (int i = 0; i < 20; i++) {sum += analogRead(AKB_PIN);delay(2);}
-uint32_t raw = sum / 20;
+  uint32_t sum = 0;//esp_task_wdt_reset();
+  for (int i = 0; i < 5; i++) {sum += analogRead(AKB_PIN);delay(1);}
+uint32_t raw = sum / 5;
 uint32_t mv  = esp_adc_cal_raw_to_voltage(raw, &adc_chars);
 
   float vadc = mv / 1000.0;
   float vakb = vadc * ((DIV_R1 + DIV_R2) / (float)DIV_R2);
 return vakb;
+esp_task_wdt_reset();
 }
 //======================================================
 void timers() { 
-  
   if(x1==0){ x1=1;  timer = millis();}
    sec = (millis() - timer) / 1000ul; seconds = (sec % 3600ul) % 60ul; minutes = (sec % 3600ul) / 60ul; hours = (sec / 3600ul);
   sprintf (buffer, "%02d:%02d:%02d", hours, minutes,seconds ); web_time = buffer;}
@@ -597,7 +645,7 @@ void stop(){
  ledcWrite(23,0); // шим вентиль отопителя 400Гц
  digitalWrite(22,LOW);  // отопитель
  digitalWrite(18,LOW); // климат
-   
+  esp_task_wdt_reset(); 
  }
 //============================================================================================================================== 
 //=======================================================================================================================
@@ -611,7 +659,7 @@ void webstop(){ ini(1);
 }
 
 //=======================================================================================================================
-void webstart(){ ini(1);
+void webstart(){ ini(1); esp_task_wdt_reset();
 if (n2==0){
    kLineSerial.write(Init1, sizeof(Init1)); recive(sizeof(Init1));
    kLineSerial.write(Init2, sizeof(Init2)); recive(sizeof(Init2));
@@ -628,7 +676,8 @@ if ( n3==1){  ini(1);
   kLineSerial.write(Request1, sizeof(Request1)); recive(sizeof(Request1));
   n3 =0;}
    n1 = kLineSerial.available(); Serial.print("n1 = "); Serial.println(n1); //Функция получает количество байт(символов)
- while(kLineSerial.available()) { for (int i=0;i<n1;i++) Answer[i]=kLineSerial.read();}
+  unsigned long t = millis(); 
+ while(kLineSerial.available()) { for (int i=0;i<n1;i++) Answer[i]=kLineSerial.read(); if (millis() - t > 50) return;}
    Serial.println("DATA -------------------------------------------------------"); 
    for (int i=sizeof(Request1);i<n1;i++) {Serial.print(Answer[i],HEX);  Serial.print(" "); } Serial.println("");
    Serial.println("-------------------------------------------------------------"); 
@@ -642,10 +691,11 @@ mode = Answer[sizeof(Request1)+9];
  }}
 //=======================================================================================
 void recive(int r){
-
+esp_task_wdt_reset();
 
    n = kLineSerial.available(); oled.setCursor(0, 6); oled.print("Rx n = "); oled.print(n);   oled.print("   r = "); oled.print(r);
- while(kLineSerial.available()) { for (int i=0;i<n;i++) Answer[i]=kLineSerial.read(); }
+  unsigned long t = millis(); 
+ while(kLineSerial.available()) { for (int i=0;i<n;i++) Answer[i]=kLineSerial.read(); if (millis() - t > 50) return; }
   //oled.setCursor(0, 7);oled.print("                                            ");oled.update();
 
       for (int i=r;i<n;i++) {Serial.print(Answer[i],HEX);  Serial.print(" "); } Serial.println("");
@@ -654,7 +704,7 @@ void recive(int r){
   //oled.update();
 }
 //=======================================================================================================================
-void data1(int n4) {
+void data1(int n4) {esp_task_wdt_reset();
   if (n4==1){
    kLineSerial.write(Init1, sizeof(Init1)); recive(sizeof(Init1));
    kLineSerial.write(Init2, sizeof(Init2)); recive(sizeof(Init2));
@@ -662,7 +712,8 @@ void data1(int n4) {
    kLineSerial.write(Request7, sizeof(Request7));recive(sizeof(Request7));
 n4=0;}
    n = kLineSerial.available(); Serial.print("n = "); Serial.println(n1);     //Функция получает количество байт(символов)
- while(kLineSerial.available()) { for (int i=0;i<n;i++) Answer[i]=kLineSerial.read();}
+   unsigned long t = millis();
+ while(kLineSerial.available()) { for (int i=0;i<n;i++) Answer[i]=kLineSerial.read(); if (millis() - t > 50) return;}//esp_task_wdt_reset();
   
   Serial.println("DATA1 -------------------------------------------------------"); 
   for (int i=sizeof(Request7);i<n;i++) {Serial.print(Answer[i],HEX);  Serial.print(" "); } Serial.println("");
@@ -693,12 +744,17 @@ void WIFISEL () {
  //portalRun(); 
 label0:
  if(portal==0){
+  
    EEPROM.get(0, portalCfg.SSID); EEPROM.get(150, portalCfg.pass); WiFi.mode(WIFI_STA); WiFi.begin(portalCfg.SSID, portalCfg.pass);
       oled.setCursor(0, 0);oled.println(portalCfg.SSID); oled.print(portalCfg.pass); oled.update(); delay(3000); oled.clear();
-      oled.setCursor(0, 3);oled.println("Подключение.");oled.update(); 
+      oled.setCursor(0, 3);oled.println("Подключение.");oled.update(); esp_task_wdt_reset();
 
   timerwifi33 = millis(); 
-  while (WiFi.status() != WL_CONNECTED) {Serial.print("."); oled.print(".");oled.update(); delay(500);
+static unsigned long wifiTimer = 0;
+if (WiFi.status() != WL_CONNECTED) { Serial.print("."); oled.print(".");oled.update();if (millis() - wifiTimer > 5000) {WiFi.reconnect();wifiTimer = millis();}return; 
+
+ // while (WiFi.status() != WL_CONNECTED) {Serial.print("."); oled.print(".");oled.update(); delay(500);
+
     if((millis()-timerwifi33) > 25000) { portal=1; WiFi.disconnect(); 
     oled.clear(); oled.setCursor(0, 0);oled.invertText(1);oled.print("  ESP-conf Start !  "); oled.update(); oled.invertText(0);goto label0;} }
     
@@ -729,7 +785,7 @@ char SSI[32];
   EEPROM.get(0, SSI);Serial.println(SSI);
   EEPROM.get(150, SSI);Serial.print(SSI);  
     
-
+oled.clear();oled.update();
 }
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
